@@ -9,11 +9,25 @@ set -e
 # Treat undefined environment variables as errors.
 set -u
 
-if ! grep 'dtoverlay=dwc2' /boot/config; then
-  echo "dtoverlay=dwc2" >> /boot/config.txt
+BOOT_CONFIG_PATH=/boot/firmware/config.txt
+
+# Raspberry Pi OS moved the boot config to /boot/firmware starting with Bookworm,
+# but older releases still use /boot/config.txt. Detect the correct path so the
+# overlay is appended to the right file.
+if [ ! -f "$BOOT_CONFIG_PATH" ]; then
+  BOOT_CONFIG_PATH=/boot/config.txt
 fi
 
-if ! grep dwc2 /etc/modules; then
+if [ ! -f "$BOOT_CONFIG_PATH" ]; then
+  echo "Could not find Raspberry Pi boot config file" >&2
+  exit 1
+fi
+
+if ! grep -q 'dtoverlay=dwc2' "$BOOT_CONFIG_PATH"; then
+  echo "dtoverlay=dwc2" >> "$BOOT_CONFIG_PATH"
+fi
+
+if ! grep -q '^dwc2' /etc/modules; then
   echo "dwc2" >> /etc/modules
 fi
 
@@ -27,8 +41,9 @@ chmod +x "$ENABLE_RPI_HID_PATH"
 
 cd $(mktemp -d)
 wget https://raw.githubusercontent.com/mtlynch/ansible-role-key-mime-pi/master/templates/usb-gadget.systemd.j2
+USB_GADGET_SERVICE_PATH=/etc/systemd/system/usb-gadget.service
 sed -e "s@{{ key_mime_pi_initialize_hid_script_path }}@${ENABLE_RPI_HID_PATH}@g" \
-  usb-gadget.systemd.j2 > /lib/systemd/system/usb-gadget.service
+  usb-gadget.systemd.j2 > "$USB_GADGET_SERVICE_PATH"
 
 systemctl daemon-reload
 systemctl enable usb-gadget.service
