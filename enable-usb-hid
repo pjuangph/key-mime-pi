@@ -10,6 +10,7 @@ set -e
 set -u
 
 BOOT_CONFIG_PATH=/boot/firmware/config.txt
+OTG_OVERLAY="dtoverlay=dwc2,dr_mode=peripheral"
 
 # Raspberry Pi OS moved the boot config to /boot/firmware starting with Bookworm,
 # but older releases still use /boot/config.txt. Detect the correct path so the
@@ -23,8 +24,11 @@ if [ ! -f "$BOOT_CONFIG_PATH" ]; then
   exit 1
 fi
 
-if ! grep -q 'dtoverlay=dwc2' "$BOOT_CONFIG_PATH"; then
-  echo "dtoverlay=dwc2" >> "$BOOT_CONFIG_PATH"
+if grep -q '^dtoverlay=dwc2' "$BOOT_CONFIG_PATH"; then
+  # Force peripheral mode so the USB controller presents as a gadget (creates /dev/hidg0).
+  sed -i "s/^dtoverlay=dwc2.*/${OTG_OVERLAY}/" "$BOOT_CONFIG_PATH"
+else
+  echo "$OTG_OVERLAY" >> "$BOOT_CONFIG_PATH"
 fi
 
 if ! grep -q '^dwc2' /etc/modules; then
